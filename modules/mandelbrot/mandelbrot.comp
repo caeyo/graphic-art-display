@@ -1,0 +1,57 @@
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 0) uniform writeonly image2D outImage;
+
+layout(std140, binding = 0) uniform FrameData {
+    float time;
+    float deltaTime;
+    uint frame;
+    float _pad0;
+    vec2 resolution;
+    vec2 _pad1;
+} uFrame;
+
+vec3 palette(float t) {
+    return 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + t));
+}
+
+void main() {
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(outImage);
+    if (gid.x >= size.x || gid.y >= size.y) {
+        return;
+    }
+
+    vec2 uv = (vec2(gid) + 0.5) / vec2(size);
+    vec2 p = (uv - 0.5) * vec2(3.5, 3.5 * float(size.y) / float(size.x));
+
+    float zoom = exp(-0.08 * uFrame.time);
+    vec2 center = vec2(-0.745, 0.186);
+    vec2 c = p * zoom + center;
+
+    vec2 z = vec2(0.0);
+    const int maxIter = 512;
+    int iter = 0;
+
+    for (int i = 0; i < maxIter; i++) {
+        float q = dot(z, z);
+        if (q > 4.0) {
+            iter = i;
+            break;
+        }
+        z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+        iter = i + 1;
+    }
+
+    vec4 color;
+    if (iter >= maxIter) {
+        color = vec4(0.0, 0.0, 0.0, 1.0);
+    } else {
+        float smoothIter = float(iter) - log2(log2(dot(z, z)));
+        float t = smoothIter / float(maxIter);
+        color = vec4(palette(t + 0.02 * uFrame.time), 1.0);
+    }
+
+    imageStore(outImage, gid, color);
+}
