@@ -9,4 +9,6 @@ glutin = "0.32"
 glutin-winit = "0.5"
 glow = "0.16"
 raw-window-handle = "0.6"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
 winit = "0.30"

@@ -1,0 +1,5 @@
+name = "Lorenz Attractor"
+type = "compute"
+entry = "main.comp"
+workgroup = [16, 16, 1]
+state = "trail"

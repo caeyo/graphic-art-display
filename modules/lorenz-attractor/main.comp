@@ -1,0 +1,135 @@
+#version 460 core
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 0) uniform writeonly image2D outImage;
+layout(rgba32f, binding = 1) uniform readonly image2D trailIn;
+layout(rgba32f, binding = 2) uniform writeonly image2D trailOut;
+
+layout(std140, binding = 0) uniform FrameData {
+    float time;
+    float deltaTime;
+    uint frame;
+    uint seed;
+    vec2 resolution;
+    vec2 _pad1;
+} uFrame;
+
+uint hashU(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+
+float hashF(uint n) {
+    return float(hashU(uFrame.seed + n)) / 4294967295.0;
+}
+
+vec3 lorenz(vec3 p, float rho) {
+    return vec3(
+        10.0 * (p.y - p.x),
+        p.x * (rho - p.z) - p.y,
+        p.x * p.y - (8.0 / 3.0) * p.z
+    );
+}
+
+vec3 hsv2rgb(vec3 c) {
+    vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+    return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+
+ivec2 xzToPixel(vec2 xz, ivec2 size) {
+    float nx = (xz.x + 20.0) / 40.0;
+    float nz = xz.y / 48.0;
+    return ivec2(
+        clamp(int(nx * float(size.x)), 0, size.x - 1),
+        clamp(int(nz * float(size.y)), 0, size.y - 1)
+    );
+}
+
+void splat(inout vec3 trail, vec3 rgb, vec2 xz, ivec2 gid, ivec2 size) {
+    ivec2 center = xzToPixel(xz, size);
+    vec2 delta = vec2(gid - center);
+
+    float core = exp(-dot(delta, delta) / (2.0 * 0.55 * 0.55));
+    float glow = exp(-dot(delta, delta) / (2.0 * 2.5 * 2.5));
+
+    float intensity = core * 0.55 + glow * 0.35;
+    trail += rgb * intensity;
+}
+
+float lorenzRho() {
+    return 26.0 + hashF(1u) * 9.0;
+}
+
+void main() {
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(outImage);
+    if (gid.x >= size.x || gid.y >= size.y) {
+        return;
+    }
+
+    vec3 p;
+    if (uFrame.frame == 0u) {
+        p = vec3(0.1, 1.0, 1.0);
+    } else {
+        p = imageLoad(trailIn, ivec2(0)).rgb;
+    }
+
+    vec3 trail = vec3(0.0);
+    if (uFrame.frame > 0u && gid != ivec2(0)) {
+        trail = imageLoad(trailIn, gid).rgb;
+        trail *= 0.993;
+    }
+
+    float rho = lorenzRho();
+    float dt = 0.004;
+    const int stepsPerFrame = 6;
+    const int segmentSamples = 16;
+
+    vec3 pPrev = p;
+    for (int j = 0; j < stepsPerFrame; j++) {
+        p += lorenz(p, rho) * dt;
+
+        for (int k = 0; k <= segmentSamples; k++) {
+            float t = float(k) / float(segmentSamples);
+            vec2 xz = mix(pPrev.xz, p.xz, t);
+            float hue = fract(
+                uFrame.time * 0.06
+                + float(j * (segmentSamples + 1) + k) * 0.00035
+            );
+            vec3 rgb = hsv2rgb(vec3(hue, 0.88, 1.0));
+            splat(trail, rgb, xz, gid, size);
+        }
+
+        pPrev = p;
+    }
+
+    vec3 bloom = trail;
+    for (int oy = -3; oy <= 3; oy++) {
+        for (int ox = -3; ox <= 3; ox++) {
+            if (ox == 0 && oy == 0) {
+                continue;
+            }
+            ivec2 tap = clamp(gid + ivec2(ox, oy), ivec2(0), size - ivec2(1));
+            if (tap == ivec2(0)) {
+                continue;
+            }
+            float w = exp(-float(ox * ox + oy * oy) / 8.0);
+            bloom += imageLoad(trailIn, tap).rgb * w * 0.05;
+        }
+    }
+
+    vec3 display = vec3(1.0) - exp(-bloom * 0.55);
+    display = mix(display, bloom * 0.85, 0.3);
+
+    if (gid == ivec2(0)) {
+        imageStore(trailOut, ivec2(0), vec4(p, 1.0));
+        imageStore(outImage, ivec2(0), vec4(0.0, 0.0, 0.0, 1.0));
+    } else {
+        imageStore(trailOut, gid, vec4(trail, 1.0));
+        imageStore(outImage, gid, vec4(clamp(display, 0.0, 1.0), 1.0));
+    }
+}

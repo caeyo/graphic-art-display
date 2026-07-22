@@ -1,0 +1,4 @@
+name = "Mandelbrot Deep Zoom"
+type = "compute"
+entry = "main.comp"
+workgroup = [16, 16, 1]

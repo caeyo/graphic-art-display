@@ -1,0 +1,5 @@
+name = "Gray-Scott Reaction Diffusion"
+type = "compute"
+entry = "main.comp"
+workgroup = [8, 8, 1]
+state = "ping-pong"
