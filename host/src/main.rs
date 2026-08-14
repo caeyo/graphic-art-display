@@ -223,7 +223,7 @@ impl ApplicationHandler for App {
             .with_title("Art Display")
             .with_inner_size(LogicalSize::new(width, height));
 
-        if self.args.fullscreen {
+        if self.args.fullscreen() {
             window_attributes = window_attributes.with_fullscreen(Some(
                 winit::window::Fullscreen::Borderless(None),
             ));
@@ -320,7 +320,8 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         match event {
-            WindowEvent::CloseRequested => self.request_exit(event_loop),
+            WindowEvent::CloseRequested if !self.args.kiosk => self.request_exit(event_loop),
+            WindowEvent::CloseRequested => {}
             WindowEvent::RedrawRequested => {
                 if self.exiting {
                     return;
@@ -356,7 +357,8 @@ impl ApplicationHandler for App {
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 match event.logical_key {
-                    Key::Named(NamedKey::Escape) => self.request_exit(event_loop),
+                    Key::Named(NamedKey::Escape) if !self.args.kiosk => self.request_exit(event_loop),
+                    Key::Named(NamedKey::Escape) => {}
                     Key::Named(NamedKey::ArrowRight) => self.next_module(),
                     Key::Named(NamedKey::ArrowLeft) => self.prev_module(),
                     Key::Character(ref ch) => match ch.as_str() {
@@ -406,6 +408,9 @@ impl Drop for App {
 
 fn main() {
     let args = Args::parse();
+    if args.kiosk {
+        eprintln!("art-display: starting in kiosk mode");
+    }
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(args);
     event_loop.run_app(&mut app).unwrap();

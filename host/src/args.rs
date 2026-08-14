@@ -9,6 +9,10 @@ pub struct Args {
     #[arg(long)]
     pub fullscreen: bool,
 
+    /// Production kiosk: fullscreen, ignore Esc/close, log to stderr/journal.
+    #[arg(long)]
+    pub kiosk: bool,
+
     /// Directory containing art module folders.
     #[arg(long)]
     pub modules_path: Option<PathBuf>,
@@ -25,6 +29,10 @@ impl Args {
             .split_once('x')
             .unwrap_or(("1280", "720"));
         (w.parse().unwrap_or(1280), h.parse().unwrap_or(720))
+    }
+
+    pub fn fullscreen(&self) -> bool {
+        self.fullscreen || self.kiosk
     }
 
     pub fn modules_path(&self) -> PathBuf {

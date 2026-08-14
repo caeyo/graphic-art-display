@@ -1,0 +1,30 @@
+[Unit]
+Description=GPU Art Display Kiosk
+Documentation=file:/opt/art-display/README.md
+After=local-fs.target
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+User=artdisplay
+Group=artdisplay
+WorkingDirectory=/opt/art-display
+Environment=HOME=/home/artdisplay
+EnvironmentFile=-/etc/art-display/env
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=art-display
+ExecStartPre=/usr/local/lib/art-display/console-blanking-off.sh
+ExecStart=/usr/bin/xinit /usr/local/lib/art-display/xsession.sh -- /usr/bin/X :0 -nolisten tcp vt1 -keeptty
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target
